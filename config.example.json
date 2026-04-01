@@ -1,0 +1,53 @@
+{
+  "client_name": "Your Company Name",
+  "document_type": "NIT",
+  "document_number": "YOUR_DOCUMENT_NUMBER",
+  "document_number_PE": "YOUR_PE_DOCUMENT",
+  "document_number_MX": "YOUR_MX_RFC",
+  "client_email": "your-email@company.com",
+  "support_email": "support@company.com",
+  "support_email_adsoft": "your-adsoft-email@company.com",
+  "client_logo": "https://your-company.com/logo.png",
+  "auth_method": "user_oauth",
+  "qa": true,
+  
+  "service_account_credentials": {
+    "type": "service_account",
+    "project_id": "",
+    "private_key_id": "",
+    "private_key": "",
+    "client_email": "",
+    "client_id": "",
+    "auth_uri": "",
+    "token_uri": "",
+    "auth_provider_x509_cert_url": "",
+    "client_x509_cert_url": ""
+  },
+  
+  "user_oauth": {
+    "client_id": "YOUR_GOOGLE_CLIENT_ID",
+    "client_secret": "YOUR_GOOGLE_CLIENT_SECRET",
+    "redirect_uri": "https://localhost:3000/oauth2callback",
+    "token_path": "token.pickle"
+  },
+
+  "adsoft_service": {
+    "get_type_document_url": "YOUR_LAMBDA_URL",
+    "invoice_analyzer_login_url": "YOUR_INVOICE_ANALYZER_LOGIN_URL",
+    "invoice_analyzer_url": "YOUR_INVOICE_ANALYZER_URL",
+    "payment_request_login_url": "YOUR_PAYMENT_REQUEST_LOGIN_URL",
+    "payment_request_url": "YOUR_PAYMENT_REQUEST_URL",
+    "invoice_analyzer_ocr_url": "YOUR_OCR_URL",
+    "send_trazability_url": "YOUR_SQS_URL",
+    "webhook_url": "YOUR_WEBHOOK_URL",
+    "username": "YOUR_USERNAME",
+    "password": "YOUR_PASSWORD",
+    "api_key": "YOUR_API_KEY"
+  },
+
+  "labels": {
+    "country_aliases": {
+      "demo.ar@adsoft.company": "AR"
+    }
+  }
+}
