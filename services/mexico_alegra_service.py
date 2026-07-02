@@ -33,6 +33,10 @@ class MexicoAlegraService:
         self.token = config["token"]
         self.auth = self._generate_auth_header(self.user, self.token)
         self.country = "MX"
+        # Catálogo de retenciones de Alegra (se carga 1 vez, no por factura).
+        self._retention_catalog = None
+        # Tolerancia para hacer match entre el % capturado y el del catálogo.
+        self.RETENTION_PCT_TOLERANCE = 0.05
     
     def _generate_auth_header(self, user: str, token: str) -> str:
         """Generate base64 encoded authorization header."""
@@ -389,6 +393,72 @@ class MexicoAlegraService:
             logger.error(f"Error checking duplicate invoice: {e}", exc_info=True)
             return False
     
+    def _load_retention_catalog(self) -> list:
+        """Carga el catálogo de retenciones de Alegra UNA sola vez (cacheado).
+
+        Devuelve una lista de dicts {id, type, percentage(float)} de las
+        retenciones activas. Se consulta una vez por corrida (no por factura),
+        de modo que los IDs no se queman en código y se adaptan si Alegra cambia.
+        """
+        if self._retention_catalog is not None:
+            return self._retention_catalog
+
+        url = f"{self.base_url}api/v1/retentions"
+        try:
+            response = requests.get(url, headers=self._get_headers())
+            response.raise_for_status()
+            data = response.json() or []
+            catalog = []
+            for r in data:
+                if r.get("status") and r.get("status") != "active":
+                    continue
+                try:
+                    pct = round(float(r.get("percentage", 0)), 2)
+                except (TypeError, ValueError):
+                    continue
+                catalog.append({
+                    "id": str(r.get("id")),
+                    "type": (r.get("type") or "").upper(),
+                    "percentage": pct,
+                    "name": r.get("name", ""),
+                })
+            self._retention_catalog = catalog
+            logger.info(f"Catálogo de retenciones Alegra cargado: {len(catalog)} entradas")
+            return catalog
+        except Exception as e:
+            logger.error(f"Error cargando catálogo de retenciones: {e}", exc_info=True)
+            self._retention_catalog = []
+            return self._retention_catalog
+
+    def resolve_retention_id(self, tax_type: str, amount: float, subtotal: float) -> Optional[str]:
+        """Resuelve el ID de retención de Alegra para (tipo, monto, base).
+
+        Calcula el % = amount/subtotal y busca en el catálogo una retención del
+        mismo tipo con ese % (dentro de la tolerancia). Devuelve el id o None si
+        no hay match (la factura se saltará y se reportará; no se adivina).
+        """
+        if not subtotal or subtotal <= 0 or not amount or amount <= 0:
+            return None
+        catalog = self._load_retention_catalog()
+        if not catalog:
+            return None
+        pct = round(amount / subtotal * 100, 2)
+        tax_type = (tax_type or "").upper()
+
+        candidates = [
+            c for c in catalog
+            if c["type"] == tax_type and abs(c["percentage"] - pct) <= self.RETENTION_PCT_TOLERANCE
+        ]
+        if not candidates:
+            logger.warning(
+                f"Retención sin match en catálogo: tipo={tax_type} monto={amount} "
+                f"base={subtotal} (~{pct}%)"
+            )
+            return None
+        # Si hay más de una (p. ej. ISR 10% tiene 2 IDs), tomar la primera (menor id).
+        candidates.sort(key=lambda c: int(c["id"]))
+        return candidates[0]["id"]
+
     def create_invoice(self, analyzed_data: Dict[str, Any], provider_info: Dict[str, Any], xml_file_path: str = None) -> Optional[Dict[str, Any]]:
         """
         Create invoice in Alegra for Mexico.

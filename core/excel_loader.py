@@ -19,15 +19,19 @@ class ExcelLoader:
     # AM: Index 38 (Date)
     # AN: Index 39 (Subtotal)
     # AO: Index 40 (Total)
-    # AT: Index 45 (ISR Retention)
-    
+    # AP: Index 41 (Retención ISR)
+    # AQ: Index 42 (Retención IVA)
+    # AT: Index 45 (ISR Retention - legacy, ya no se usa para retención)
+
     COL_RFC = 4      # E
     COL_IVA = 34     # AI
     COL_UUID = 36    # AK
     COL_DATE = 38    # AM
     COL_SUBTOTAL = 39 # AN
     COL_TOTAL = 40   # AO
-    COL_ISR = 45     # AT
+    COL_ISR_RET = 41 # AP - monto de retención de ISR
+    COL_IVA_RET = 42 # AQ - monto de retención de IVA
+    COL_ISR = 45     # AT (legacy)
     
     # Row processing controls (Excel row numbers, 1-based)
     DEFAULT_START_ROW = 408  # Keep skipping header row
@@ -108,6 +112,9 @@ class ExcelLoader:
                         "total": float(row[self.COL_TOTAL]) if pd.notna(row[self.COL_TOTAL]) else 0.0,
                         "iva": float(row[self.COL_IVA]) if pd.notna(row[self.COL_IVA]) else 0.0,
                         "isr": float(row[self.COL_ISR]) if pd.notna(row[self.COL_ISR]) else 0.0,
+                        # Retenciones: ISR en columna AP, IVA en columna AQ
+                        "isr_ret": float(row[self.COL_ISR_RET]) if pd.notna(row[self.COL_ISR_RET]) else 0.0,
+                        "iva_ret": float(row[self.COL_IVA_RET]) if pd.notna(row[self.COL_IVA_RET]) else 0.0,
                         # Store original row index for reference (excel row is index + 1)
                         "excel_row": index + 1
                     }

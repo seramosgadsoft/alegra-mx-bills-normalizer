@@ -58,26 +58,31 @@ class ExcelAdapter:
                 "type": "transfer"
             })
             
-        if excel_data.get("isr", 0) > 0:
-            taxes.append({
-                "name": "ISR",
-                "rate": 0.0, # Rate calculated from amount/base usually, or handled by mapping
-                "amount": excel_data.get("isr"),
-                "type": "retention"
-            })
+        # Retenciones desde columnas AP (ISR) y AQ (IVA). El monto es el que
+        # capturó contabilidad; el tipo lo determina la columna. El ID de Alegra
+        # se resuelve luego contra el catálogo real de retenciones (no se quema).
+        retentions_input = []
+        isr_ret = excel_data.get("isr_ret", 0) or 0
+        iva_ret = excel_data.get("iva_ret", 0) or 0
+        if isr_ret > 0:
+            retentions_input.append({"tax_type": "ISR", "amount": float(isr_ret)})
+        if iva_ret > 0:
+            retentions_input.append({"tax_type": "IVA", "amount": float(iva_ret)})
+
+        total_retenciones = isr_ret + iva_ret
 
         return {
             "document_data": {
                 "document_information": {
-                    "document_id": excel_data.get("uuid"), # Use UUID as document number per requirement? 
-                                                         # Or should we look for Folio? 
+                    "document_id": excel_data.get("uuid"), # Use UUID as document number per requirement?
+                                                         # Or should we look for Folio?
                                                          # User said "el uuid en la columna AK" and normally we search XML by UUID.
                                                          # In Alegra usually we use Folio as number, but here we might use UUID if Folio is missing.
                                                          # Let's use UUID as document_id for now as it's the unique identifier we have.
                     "total": excel_data.get("total"),
                     "subtotal": subtotal,
                     "document_date": formatted_date,
-                    "total_tax": excel_data.get("iva", 0) - excel_data.get("isr", 0),
+                    "total_tax": excel_data.get("iva", 0) - total_retenciones,
                     "currency": "MXN", # Assumption
                     "cufe": excel_data.get("uuid") # Store UUID here too
                 },
@@ -86,7 +91,10 @@ class ExcelAdapter:
                     "name": "Unknown from Excel" # We verify by RFC in Alegra anyway
                 },
                 "items": [item],
-                "taxes": taxes
+                "taxes": taxes,
+                # Retenciones a aplicar (tipo + monto). El id de Alegra se resuelve
+                # en format_invoice contra el catálogo cargado dinámicamente.
+                "retentions_input": retentions_input
             },
             # Extra fields used by format_invoice or Alegra service
             "account_name_override": account_name or ExcelAdapter.DEFAULT_ACCOUNT_NAME

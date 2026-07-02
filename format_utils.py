@@ -145,6 +145,28 @@ def format_invoice(attachment,analyzed_data, provider_information, alegra_client
             "purchases": {"categories": categories}
         }
 
+        # MX: agregar retenciones (ISR/IVA) resolviendo el id contra el catálogo
+        # de Alegra. Base para el % = subtotal de la factura. Si alguna retención
+        # no se puede mapear, NO se crea la factura (se retorna None) para no
+        # cargarla con un monto incorrecto — se reporta y se revisa manualmente.
+        retentions_input = analyzed_data["document_data"].get("retentions_input", []) or []
+        if country == "MX" and retentions_input:
+            base = analyzed_data["document_data"]["document_information"].get("subtotal", 0) or 0
+            retentions_payload = []
+            for ret in retentions_input:
+                rid = alegra_client.resolve_retention_id(ret.get("tax_type"), ret.get("amount"), base)
+                if not rid:
+                    send_message_to_webhook(
+                        f"Retención NO mapeada — factura {analyzed_data['document_data']['document_information']['document_id']} "
+                        f"NO se cargará. Tipo={ret.get('tax_type')} monto={ret.get('amount')} base={base}. "
+                        f"Revisar el tipo/monto de la retención en el archivo."
+                    )
+                    print(f"Retención no mapeada, se salta la factura: {ret}")
+                    return None
+                retentions_payload.append({"id": rid, "amount": ret.get("amount")})
+            if retentions_payload:
+                payload["retentions"] = retentions_payload
+
         return payload
     except Exception as e:
         send_message_to_webhook(f"Error al crear el formato de la factura de Alegra {analyzed_data['document_data']['document_information']['document_id']}: {e}")
