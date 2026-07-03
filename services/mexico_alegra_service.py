@@ -430,6 +430,25 @@ class MexicoAlegraService:
             self._retention_catalog = []
             return self._retention_catalog
 
+    def _find_retention_by_type_pct(self, tax_type: str, pct: float) -> Optional[str]:
+        """Busca en el catálogo una retención (tipo, %) dentro de la tolerancia.
+
+        Devuelve el id (menor si hay varias con el mismo %) o None.
+        """
+        catalog = self._load_retention_catalog()
+        if not catalog:
+            return None
+        tax_type = (tax_type or "").upper()
+        candidates = [
+            c for c in catalog
+            if c["type"] == tax_type and abs(c["percentage"] - pct) <= self.RETENTION_PCT_TOLERANCE
+        ]
+        if not candidates:
+            return None
+        # Si hay más de una (p. ej. ISR 10% tiene 2 IDs), tomar la primera (menor id).
+        candidates.sort(key=lambda c: int(c["id"]))
+        return candidates[0]["id"]
+
     def resolve_retention_id(self, tax_type: str, amount: float, subtotal: float) -> Optional[str]:
         """Resuelve el ID de retención de Alegra para (tipo, monto, base).
 
@@ -439,25 +458,31 @@ class MexicoAlegraService:
         """
         if not subtotal or subtotal <= 0 or not amount or amount <= 0:
             return None
-        catalog = self._load_retention_catalog()
-        if not catalog:
-            return None
         pct = round(amount / subtotal * 100, 2)
-        tax_type = (tax_type or "").upper()
-
-        candidates = [
-            c for c in catalog
-            if c["type"] == tax_type and abs(c["percentage"] - pct) <= self.RETENTION_PCT_TOLERANCE
-        ]
-        if not candidates:
+        rid = self._find_retention_by_type_pct(tax_type, pct)
+        if rid is None:
             logger.warning(
-                f"Retención sin match en catálogo: tipo={tax_type} monto={amount} "
-                f"base={subtotal} (~{pct}%)"
+                f"Retención sin match en catálogo: tipo={(tax_type or '').upper()} "
+                f"monto={amount} base={subtotal} (~{pct}%)"
             )
+        return rid
+
+    def resolve_iva_retention_fallback(self, amount: float) -> Optional[str]:
+        """Opción B (DAPYR): retención de IVA cuya base NO es el subtotal.
+
+        Cuando el proveedor calcula la retención de IVA sobre una base distinta
+        al subtotal (p. ej. IVA 4% sobre el flete, no sobre el total facturado),
+        el % monto/subtotal no coincide con ningún renglón del catálogo. En ese
+        caso se usa el renglón de IVA 4% (autotransporte terrestre de carga) y se
+        envía el MONTO EXACTO capturado por contabilidad — Alegra respeta el
+        amount enviado y no lo recalcula a partir del % del renglón.
+        """
+        if not amount or amount <= 0:
             return None
-        # Si hay más de una (p. ej. ISR 10% tiene 2 IDs), tomar la primera (menor id).
-        candidates.sort(key=lambda c: int(c["id"]))
-        return candidates[0]["id"]
+        rid = self._find_retention_by_type_pct("IVA", 4.0)
+        if rid is None:
+            logger.warning("Fallback IVA 4% (Opción B) sin renglón en catálogo.")
+        return rid
 
     def create_invoice(self, analyzed_data: Dict[str, Any], provider_info: Dict[str, Any], xml_file_path: str = None) -> Optional[Dict[str, Any]]:
         """
