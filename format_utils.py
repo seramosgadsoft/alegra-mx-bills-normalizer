@@ -155,6 +155,13 @@ def format_invoice(attachment,analyzed_data, provider_information, alegra_client
             retentions_payload = []
             for ret in retentions_input:
                 rid = alegra_client.resolve_retention_id(ret.get("tax_type"), ret.get("amount"), base)
+                # Opción B (DAPYR): retención de IVA cuya base no es el subtotal
+                # (IVA 4% sobre el flete). El % monto/subtotal no mapea; se usa el
+                # renglón de IVA 4% con el monto EXACTO (Alegra respeta el amount).
+                if not rid and (ret.get("tax_type") or "").upper() == "IVA":
+                    rid = alegra_client.resolve_iva_retention_fallback(ret.get("amount"))
+                    if rid:
+                        print(f"Retención IVA base especial → IVA 4% (Opción B): {ret}")
                 if not rid:
                     send_message_to_webhook(
                         f"Retención NO mapeada — factura {analyzed_data['document_data']['document_information']['document_id']} "

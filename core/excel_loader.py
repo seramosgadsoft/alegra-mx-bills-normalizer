@@ -34,8 +34,9 @@ class ExcelLoader:
     COL_ISR = 45     # AT (legacy)
     
     # Row processing controls (Excel row numbers, 1-based)
-    DEFAULT_START_ROW = 408  # Keep skipping header row
-    DEFAULT_MAX_ROWS = 330  # Process all rows when None
+    # Febrero 2026: filas 1046-1328 (283 facturas) de la hoja PURCHASE - INVOICE.
+    DEFAULT_START_ROW = 1046  # Primera factura del corte de febrero
+    DEFAULT_MAX_ROWS = 283  # Facturas del corte de febrero
     
     def __init__(
         self,
